@@ -6,7 +6,7 @@ final class AniKotoViewController: UIViewController,
                                   WKNavigationDelegate,
                                   WKUIDelegate {
 
-    private let appURL = URL(string: "https://anikoto.cz/")!
+    private let appURL = URL(string: "https://anikoto.cz/home")!
     private let adBlockerID = "AniKotoAdBlockRules"
 
     private var webView: WKWebView!
