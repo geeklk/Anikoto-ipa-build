@@ -1,4 +1,5 @@
-name: Build Study Buddy IPA
+
+name: Build AniKoto IPA
 
 on:
   workflow_dispatch:
@@ -7,7 +8,6 @@ on:
 
 jobs:
   build:
-    # Public repositories can use standard GitHub-hosted macOS runners for free.
     runs-on: macos-15
     steps:
       - name: Check out source
@@ -22,8 +22,8 @@ jobs:
       - name: Build unsigned iOS app for TrollStore
         run: |
           xcodebuild \
-            -project StudyBuddy.xcodeproj \
-            -scheme StudyBuddy \
+            -project AniKoto.xcodeproj \
+            -scheme AniKoto \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
@@ -35,17 +35,17 @@ jobs:
 
       - name: Package IPA
         run: |
-          APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/StudyBuddy.app"
+          APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/AniKoto.app"
           test -d "$APP_PATH"
           mkdir -p package/Payload
-          cp -R "$APP_PATH" package/Payload/StudyBuddy.app
+          cp -R "$APP_PATH" package/Payload/AniKoto.app
           cd package
-          /usr/bin/zip -qry ../StudyBuddy.ipa Payload
+          /usr/bin/zip -qry ../AniKoto.ipa Payload
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StudyBuddy-IPA
-          path: StudyBuddy.ipa
+          name: AniKoto-IPA
+          path: AniKoto.ipa
           if-no-files-found: error
           retention-days: 14
