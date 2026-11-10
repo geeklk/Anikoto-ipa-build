@@ -1,3 +1,4 @@
+
 import UIKit
 import WebKit
 
@@ -6,6 +7,7 @@ final class AniKotoViewController: UIViewController,
                                   WKUIDelegate {
 
     private let appURL = URL(string: "https://anikoto.cz/")!
+    private let adBlockerID = "AniKotoAdBlockRules"
 
     private var webView: WKWebView!
 
@@ -33,7 +35,9 @@ final class AniKotoViewController: UIViewController,
         configureLoadingView()
         configureErrorView()
 
-        loadAniKoto()
+        installAdBlocker {
+            self.loadAniKoto()
+        }
     }
 
     // MARK: - WebView
@@ -88,12 +92,10 @@ final class AniKotoViewController: UIViewController,
         webView.allowsBackForwardNavigationGestures = true
         webView.pageZoom = 1.0
 
-        // Prevent automatic safe-area spacing.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.contentInset = .zero
         webView.scrollView.scrollIndicatorInsets = .zero
 
-        // Pull to refresh.
         webView.scrollView.refreshControl = refreshControl
         refreshControl.addTarget(
             self,
@@ -103,13 +105,69 @@ final class AniKotoViewController: UIViewController,
 
         view.addSubview(webView)
 
-        // Fill the complete screen.
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: view.topAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+    }
+
+    // MARK: - Ad Blocker
+
+    private func installAdBlocker(completion: @escaping () -> Void) {
+
+        let rules = """
+        [
+            {
+                "trigger": {
+                    "url-filter": ".*",
+                    "if-domain": [
+                        "my.rtmark.net",
+                        "*.my.rtmark.net",
+                        "luugy.com",
+                        "*.luugy.com",
+                        "doubleclick.net",
+                        "*.doubleclick.net",
+                        "googlesyndication.com",
+                        "*.googlesyndication.com",
+                        "googleadservices.com",
+                        "*.googleadservices.com",
+                        "popads.net",
+                        "*.popads.net",
+                        "popcash.net",
+                        "*.popcash.net",
+                        "adsterra.com",
+                        "*.adsterra.com"
+                    ]
+                },
+                "action": {
+                    "type": "block"
+                }
+            }
+        ]
+        """
+
+        WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: adBlockerID,
+            encodedContentRuleList: rules
+        ) { [weak self] ruleList, error in
+
+            guard let self = self else { return }
+
+            if let error = error {
+                print("Ad blocker error: \(error.localizedDescription)")
+            }
+
+            if let ruleList = ruleList {
+                self.webView.configuration.userContentController
+                    .add(ruleList)
+            }
+
+            DispatchQueue.main.async {
+                completion()
+            }
+        }
     }
 
     // MARK: - Loading View
@@ -235,6 +293,7 @@ final class AniKotoViewController: UIViewController,
     // MARK: - Navigation
 
     private func isAniKotoDomain(_ url: URL) -> Bool {
+
         guard let host = url.host?.lowercased() else {
             return false
         }
@@ -258,26 +317,28 @@ final class AniKotoViewController: UIViewController,
 
             if isAniKotoDomain(url) {
                 decisionHandler(.allow)
-
-            } else if navigationAction.navigationType == .linkActivated {
-
-                UIApplication.shared.open(url)
-                decisionHandler(.cancel)
-
-            } else {
-
-                decisionHandler(.allow)
+                return
             }
 
-        } else if ["mailto", "tel", "sms"].contains(url.scheme ?? "") {
+            // Allow external embedded content such as video players.
+            if let targetFrame = navigationAction.targetFrame,
+               !targetFrame.isMainFrame {
+                decisionHandler(.allow)
+                return
+            }
 
+            // Block external main-frame redirects and ad links.
+            decisionHandler(.cancel)
+            return
+        }
+
+        if ["mailto", "tel", "sms"].contains(url.scheme ?? "") {
             UIApplication.shared.open(url)
             decisionHandler(.cancel)
-
-        } else {
-
-            decisionHandler(.allow)
+            return
         }
+
+        decisionHandler(.allow)
     }
 
     // MARK: - Popup Windows
@@ -296,10 +357,9 @@ final class AniKotoViewController: UIViewController,
 
         if isAniKotoDomain(url) {
             webView.load(URLRequest(url: url))
-        } else {
-            UIApplication.shared.open(url)
         }
 
+        // External pop-ups are blocked instead of opening Safari.
         return nil
     }
 
@@ -315,7 +375,8 @@ final class AniKotoViewController: UIViewController,
     ) {
 
         decisionHandler(
-            isAniKotoDomain(URL(string: "https://\(origin.host)")!)
+            origin.host.lowercased() == "anikoto.cz" ||
+            origin.host.lowercased().hasSuffix(".anikoto.cz")
                 ? .grant : .deny
         )
     }
